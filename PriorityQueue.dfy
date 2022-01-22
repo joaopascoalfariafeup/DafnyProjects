@@ -3,8 +3,7 @@
 * A heap is a partially ordered set represented in an array, suited to implement priority 
 * queues operations insert and deleteMax in O(heapSize).
 * Illustrates the verification of object-oriented programs and data structures.
-* Difficulty: High.
-* FEUP, MIEIC, MFES, 2019/20.
+* J. Pascoal Faria, FEUP, Jan/2022.
 */
  
 type T = int // for demo purposes, but could be real, etc.
