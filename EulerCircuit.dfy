@@ -235,41 +235,8 @@ lemma EulerTrailLemma(G: Graph, r: seq<Vertex>)
    ensures EulerTrailDegrees(G, r)
 {
   if |r| > 1 {
-    EulerTrailLemma(rmvEdge(r[|r|-2], r[|r|-1], G), r[..|r|-1]);
-
-    var G' : Graph := rmvEdge(r[|r|-2], r[|r|-1], G);
-    var first := r[0];  
-    var last := r[|r|-1]; 
-    var last' := r[|r|-2]; 
-
-    assert last != last';
-
-    assert forall x :: x in G && x != first && x != last && x != last' ==> 
-             hasEvenCard(G[x]);
-
-    if first == last' {       
-      assert hasEvenCard(G'[first]);
-      assert ! hasEvenCard(G[first]);
-
-      assert hasEvenCard(G'[last]); 
-      assert !hasEvenCard(G[last]);
+    EulerTrailLemma(rmvEdge(r[0], r[1], G), r[1..]);
     }
-    else { // firt != last'
-      assert ! hasEvenCard(G'[first]);
-
-      assert ! hasEvenCard(G'[last']);
-      assert hasEvenCard(G[last']);
-
-      if last == first {
-        assert hasEvenCard(G[first]);
-      }
-      else {
-        assert !hasEvenCard(G[first]); 
-        assert hasEvenCard(G'[last]); 
-        assert !hasEvenCard(G[last]);
-      }
-    }
-  }
 }
 
 
