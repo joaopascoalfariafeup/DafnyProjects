@@ -369,3 +369,17 @@ method dfs(v: Vertex, G: Graph) returns (r: seq<Vertex>, R: Graph)
     evenDegreesLemma(G, R, T);
     assert hasEvenDegrees(R);   
 }
+
+method testEulerCircuit() {
+  var G : Graph := map[1 := {2, 3}, 2 := {1, 3}, 3 := {1, 2, 4, 5}, 4 := {3, 5}, 5 := {3, 4}];
+  var c : seq<Vertex> := [1, 2, 3, 4, 5, 3, 1];   
+  assert c == [c[0], c[1], c[2], c[3], c[4], c[5], c[6]]; // helper ...
+  assert isEulerCircuit(c, G);
+}
+
+method testEulerTrail() {
+  var G : Graph := map[1 := {2, 3}, 2 := {1, 3}, 3 := {1, 2, 4}, 4 := {3, 5}, 5 := {4}];
+  var c : seq<Vertex> := [3, 2, 1, 3, 4, 5];   
+  assert c == [c[0], c[1], c[2], c[3], c[4], c[5]]; // helper ...
+  assert isEulerTrail(c, G);
+}
