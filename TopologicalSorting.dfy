@@ -217,3 +217,11 @@ lemma lemmaExistsSimplePath<T>(G: Graph<T>, G': Graph<T>, u: T, v: T)
     lemmaExistsSimplePath(Graph(G.V, G.E-{e}), Graph(G'.V, G'.E-{e}), e.1, v); // this lemma implies that 'e' also exist in G' 
   } 
 }
+
+
+/** Test case ***/
+method testIsTopSorting() {
+  var G: Graph<nat> := Graph({1, 2, 3, 4}, {(1, 2), (1, 4), (3, 4)});
+  var s : seq<nat> := [1, 2, 3, 4];
+  assert isTopSorting(s, G);  
+}
