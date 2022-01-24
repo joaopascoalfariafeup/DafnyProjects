@@ -219,9 +219,24 @@ lemma lemmaExistsSimplePath<T>(G: Graph<T>, G': Graph<T>, u: T, v: T)
 }
 
 
-/** Test case ***/
-method testIsTopSorting() {
-  var G: Graph<nat> := Graph({1, 2, 3, 4}, {(1, 2), (1, 4), (3, 4)});
-  var s : seq<nat> := [1, 2, 3, 4];
+/** Test cases ***/
+method testTopSortingSingleSolution() {
+  var G: Graph<nat> := Graph({1, 2, 3}, {(1, 2), (2, 3)});
+  assert validGraph(G) && acyclic(G);
+  var s : seq<nat> := [1, 2, 3];
   assert isTopSorting(s, G);  
+  var t := topsort(G);
+  assert t == s;
 }
+
+method testTopSortingMultipleSolutions() {
+  var G: Graph<nat> := Graph({1, 2, 3}, {(1, 2), (1, 3)});
+  assert validGraph(G) && acyclic(G);
+  var s1 : seq<nat> := [1, 2, 3];
+  var s2 : seq<nat> := [1, 3, 2];
+  assert isTopSorting(s1, G);  
+  assert isTopSorting(s2, G);  
+  var t := topsort(G);
+  assert t == s1 || t == s2;
+}
+
