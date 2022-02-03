@@ -117,7 +117,7 @@ class {:autocontracts} PriorityQueue {
     ensures elems() == old(elems()) - multiset{x}
   {
     // recall the lemma ...  
-    maxIsAtTop(size); 
+    maxIsAtTop(); 
     // pick the maximum from the top
     x := heap[0];  
     // reduce the size
@@ -135,7 +135,7 @@ class {:autocontracts} PriorityQueue {
     requires ! isEmpty()
     ensures isMax(x,elems())
   {
-    maxIsAtTop(size); 
+    maxIsAtTop(); 
     return heap[0];  
   }
  
@@ -188,7 +188,7 @@ class {:autocontracts} PriorityQueue {
   // This property is assumed by deleteMax and follows from the heap invariant.
   // Proved by induction on the size of the heap, reason why it receives
   // a parameter with the size to consider.
-  lemma {:induction n} maxIsAtTop(n: nat)
+  lemma {:induction n} maxIsAtTop(n: nat := size)
     requires n <= size
     ensures forall i :: 0 <= i < n ==> heap[i] <= heap[0]
   {}
