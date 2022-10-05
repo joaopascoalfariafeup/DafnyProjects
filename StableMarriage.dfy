@@ -10,14 +10,14 @@
 type  useq<T> =  s: seq<T> | !hasDuplicates(s)
 
 // Injective map
-type  inmap<K, V> =  m: map<K, V> |  isInjective(m)
+type  inmap<K, V> =  m: map<K, V> | isInjective(m)
 
 // Checks if a sequence 's' has duplicates.
 predicate hasDuplicates<T>(s: seq<T>)  {
     exists i, j :: 0 <= i < j < |s| && s[i] == s[j]
 }
 
-// Checks if a map 'm' is injective, i.e., distinct values correspond to distinct keys. 
+// Checks if a map 'm' is injective, i.e., distinct keys are mapped to distinct values. 
 predicate isInjective<K,V>(m: map<K,V>) {
     forall i, j :: i in m && j in m && i != j ==> m[i] != m[j]
 }
@@ -29,21 +29,35 @@ predicate method precedes<T(==)>(e1: T, e2: T, s: seq<T>) {
 
 // Obtains the set of elements in a sequence
 function elems<T>(s: useq<T>): set<T> 
+  ensures forall x :: x in elems(s) ==> x in s
+  ensures forall x :: x in s ==> x in elems(s) 
 {
     set i | 0 <= i < |s| :: s[i]
 }
 
-// Checks if a matching of couples is stable, knowing the preferences of men and women.
-// I.e., there is no pair (m, w) that prefer each other as compared to their current situation. 
-predicate isStable<Man, Woman>(couples: inmap <Man, Woman>, menPrefs: map<Man, useq<Woman>>, womenPrefs: map <Woman, useq<Man>>)   
-{
-    ! exists m, w :: m in menPrefs && w in womenPrefs &&
-         w in menPrefs[m] && m in womenPrefs[w] &&
-        (m in couples ==> precedes(w, couples[m], menPrefs[m]))
-        && (forall m' :: m' in couples && couples[m'] == w ==> precedes(m, m', womenPrefs[w]))          
+// Checks if a matching of couples is valid, i.e., men and women can be engaged only
+// if they are mentioned in each others preferences 
+predicate isValid<Man, Woman>(couples: inmap <Man, Woman>, menPrefs: map<Man, useq<Woman>>, womenPrefs: map <Woman, useq<Man>>) {
+  forall m :: m in couples ==> var w := couples[m];
+    m in menPrefs && w in womenPrefs && w in menPrefs[m] && m in womenPrefs[w]
 }
 
-// Stable matching by the Gale–Shapley algorithm with incomplete lists (and no ties).
+// Checks if a matching of couples is stable, i.e., there is no pair (m, w)
+// that prefer each other as compared to their current situation. 
+predicate isStable<Man, Woman>(couples: inmap <Man, Woman>, menPrefs: map<Man, useq<Woman>>, womenPrefs: map <Woman, useq<Man>>) {
+    ! exists m, w :: m in menPrefs.Keys && w in womenPrefs.Keys &&
+        unstable(m, w, couples, menPrefs, womenPrefs)
+}
+
+predicate unstable<Man, Woman>(m: Man, w: Woman, couples: inmap <Man, Woman>, menPrefs: map<Man, useq<Woman>>, womenPrefs: map <Woman, useq<Man>>)
+  requires m in menPrefs.Keys && w in womenPrefs.Keys
+{
+    w in menPrefs[m] && m in womenPrefs[w] &&
+    (m in couples ==> precedes(w, couples[m], menPrefs[m]))
+    && (forall m' :: m' in couples && couples[m'] == w ==> precedes(m, m', womenPrefs[w]))          
+}
+
+// Stable matching by the Gale–Shapley algorithm with incomplete lists and no ties.
 // Receives the lists of preferences of men and women and returns the couples created.
 // Time complexity (with proper data structures) is O(|M|*|W|), where W is the set of women and M the set of men. 
 // The types Man and Woman are defined as type parameters because their internal structure is not relevant here.
@@ -51,11 +65,10 @@ method stableMatching<Man, Woman>(menPrefs: map<Man, useq<Woman>>, womenPrefs: m
          returns(couples: inmap <Man, Woman>) 
   // P1: women referenced in men preferences must exist 
   requires forall m :: m in menPrefs ==> forall w :: w in menPrefs[m] ==> w in womenPrefs
-  // P2: women referenced in women preferences must exist 
+  // P2: man referenced in women preferences must exist 
   requires forall w :: w in womenPrefs ==> forall m :: m in womenPrefs[w] ==> m in menPrefs
   // Q1: men and women can be engaged only if they are mentioned in each others preferences 
-  ensures forall m :: m in couples ==> var w  := couples[m];
-       m in menPrefs && w in womenPrefs && w in menPrefs[m] && m in womenPrefs[w]
+  ensures isValid(couples, menPrefs, womenPrefs)
   // Q2: stable marriage (and maximality)
   ensures isStable(couples, menPrefs, womenPrefs)
 {
@@ -71,34 +84,34 @@ method stableMatching<Man, Woman>(menPrefs: map<Man, useq<Woman>>, womenPrefs: m
     // while exists a free man m who still has a woman w to propose to
     while exists m :: m in menPrefs && m !in couples && menPrefsExplored[m] < menPrefs[m]
       decreases unexploredPairs
-      // I1: lists in menPrefsExplored must be sublists in menPrefs 
-      invariant forall m :: m in menPrefsExplored ==> m in menPrefs && menPrefsExplored[m] <= menPrefs[m]
-      // I2: all men refereced in menPrefs also exist in menPrefsExplored (even with empty list) 
-      invariant forall m :: m in menPrefs ==> m in menPrefsExplored
-      // I3: to assure Q1 (incrementally, with menPrefsExplored) 
-      invariant forall m :: m in couples ==> var w  := couples[m];
-          m in menPrefsExplored && w in menPrefsExplored[m] && w in womenPrefs && m in womenPrefs[w]
-      // I4: to assure Q2 (incrementally, with menPrefsExplored)
+      // I1: menPrefsExplored has the same keys (men) as menPrefs 
+      invariant menPrefs.Keys == menPrefsExplored.Keys
+      // I2: lists in menPrefsExplored must be sublists (prefixes) in menPrefs 
+      invariant forall m :: m in menPrefsExplored ==> menPrefsExplored[m] <= menPrefs[m]
+      // I3: to assure Q1 incrementally, with menPrefsExplored instead of menPrefs 
+      invariant isValid(couples, menPrefsExplored, womenPrefs)
+      // I4: to assure Q2 incrementally, with menPrefsExplored instead of menPrefs
       invariant isStable(couples, menPrefsExplored, womenPrefs)
-      // I5: while engaged, men do not propose to further women (needed to prove that isStable is maintained)
+      // I5: while engaged, men do not propose to further women (needed to preserve isStable)
       invariant forall m :: m in couples ==> couples[m] == last(menPrefsExplored[m]) 
-      // I6: invariant to ensure that the update statement decreases unexploredPairs
-      invariant forall m, w :: m in menPrefs && w in menPrefs[m] && w !in menPrefsExplored[m] ==> (m, w) in unexploredPairs
+      // I6: invariant defining the contents of unexploredPairs
+      invariant unexploredPairs == set m, w | m in menPrefs && w in menPrefs[m] && w !in menPrefsExplored[m] :: (m, w)
     {
-        // select a man in such condition
+        // select a man in such condition (free man m who still has a woman w to propose to)
         var m :| m in menPrefs && m !in couples && menPrefsExplored[m] < menPrefs[m];  
 
-        // select the first woman on m’s list to whom m has not yet proposed
+        // select the next woman on m’s list 
+        // (using auxiliary function to circumvent Dafny limitation)
         var w := nth(menPrefs[m], |menPrefsExplored[m]|); 
 
         // if w is not free (i.e., some pair (m', w) already exists)
-        if m' :| m' in couples && couples[m'] == w
+        if m' :| m' in couples && couples[m'] == w 
         { 
             // if w prefers m to m'
-            if m in womenPrefs[w] && precedes(m, m', womenPrefs[w])
+            if m in womenPrefs[w] && precedes(m, m', womenPrefs[w]) 
             {
                 // m' becomes free
-                couples := map x | x in couples && couples[x] != w :: couples[x];
+                couples := map x | x in couples && x != m' :: couples[x];
 
                 // (m, w) become engaged
                 couples := couples[m := w];
@@ -124,46 +137,33 @@ method stableMatching<Man, Woman>(menPrefs: map<Man, useq<Woman>>, womenPrefs: m
  * Some test cases for the stable marriage problem.
  */
 
-method test<Man, Woman>(name: string, menPrefs: map<Man, seq<Woman>>, womenPrefs: map<Woman, useq<Man>>, expectedCouples: set<map<Man, Woman>>)
-  requires forall m :: m in menPrefs ==> ! hasDuplicates(menPrefs[m])
-  requires forall m :: m in menPrefs ==> forall w :: w in menPrefs[m] ==> w in womenPrefs
-  requires forall w :: w in womenPrefs ==> forall m :: m in womenPrefs[w] ==> m in menPrefs
-{
-    print "test ", name, ": ";
+method testStableMatching1() {
+    var menPrefs := map [1 := [1, 2], 2 := [1, 2]]; 
+    var womenPrefs := map [1 := [1], 2 := [2]];
+    var expectedCouples := map[1 := 1, 2 := 2]; 
     var actualCouples := stableMatching(menPrefs, womenPrefs);
-    if actualCouples in expectedCouples {
-        print "passed!\n";
-        if |expectedCouples| > 1 {
-            print "  actualCouples = ", actualCouples , "\n";
-        }
-    }
-    else {
-        print "failed!\n";
-        print "  actualCouples = ", actualCouples , "\n";
-        print "  expectedCouples = ", expectedCouples , "\n";
-    }
+    assert isValid(expectedCouples, menPrefs, womenPrefs); // proof helper...
+    assert actualCouples == expectedCouples;
 }
 
-method test1() {
-    test("test1", map [1 := [1, 2], 2 := [1, 2]], map [1 := [1], 2 := [2]], 
-           {map[1 := 1, 2 := 2]});
+method testStableMatching2() {
+    var menPrefs := map [1 := [2, 1], 2 := [1, 2]]; 
+    var womenPrefs := map [1 := [1, 2], 2 := [2, 1]];
+    var expectedCouples1 := map[1 := 2, 2 := 1]; 
+    var expectedCouples2 := map[1 := 1, 2 := 2]; 
+    var actualCouples := stableMatching(menPrefs, womenPrefs);
+    assert isValid(expectedCouples1, menPrefs, womenPrefs); // proof helper...
+    assert actualCouples == expectedCouples1 || actualCouples == expectedCouples2;
 }
 
-method test2() {
-    test("test2",  map [1 := [2, 1], 2 := [1, 2]], map [1 := [1, 2], 2 := [2, 1]],
-      {map[1 := 2, 2 := 1]});
-}
-
-method test3() {
-    test("test3",  map [1 := [1, 2], 2 := [1]], map [1 := [1, 2], 2 := [2, 1]],
-      {map[1 := 2, 2 := 1], map[1 := 1]});
-}
-
-method testStableMarriage() {
-    print "Running test cases for the stable marriage problem ...\n";
-    test1();
-    test2();
-    test3();
+method testStableMatching3() {
+    var menPrefs := map [1 := [1, 2], 2 := [1]]; 
+    var womenPrefs := map [1 := [1, 2], 2 := [2, 1]];
+    var expectedCouples1 := map[1 := 2, 2 := 1]; 
+    var expectedCouples2 := map[1 := 1]; 
+    var actualCouples := stableMatching(menPrefs, womenPrefs);
+    assert isValid(expectedCouples1, menPrefs, womenPrefs); // proof helper...
+    assert actualCouples == expectedCouples1 || actualCouples == expectedCouples2;
 }
 
 /* 
@@ -178,7 +178,7 @@ function method moveToHead<T(==)>(s: useq<T>, x: T) : useq<T>
   requires x in s 
   ensures forall y :: y in s ==> y in moveToHead(s, x)
 {
-    var i :| 0 <= i < |s| && s[i] == x; [s[i]] + s[..i] + s[i+1..] 
+    var i :| 0 <= i < |s| && s[i] == x; [s[i]] + s[..i] + s[i+1..]
 }
 
 // Gets the last element in a sequence
@@ -232,7 +232,7 @@ method teachersPlacement(vacancies: set<Vacancy>, teachers: useq<Teacher>, prefe
   // compared to remaining free, or t is the teacher initially placed and is not occupying v, or the teacher t' that
   // currently occupies v was not initially placed there and has a lower rank than t) 
   ensures  ! exists  t, v :: t in teachers && v in preferences[t] &&
-               (t !in finalPlacement || precedes(v, finalPlacement[t], preferences[t])) // t prefers v
+               (t in finalPlacement ==> precedes(v, finalPlacement[t], preferences[t])) // t prefers v
                && teacherHasPrecedenceForVacancy(t, v, finalPlacement, teachers, initialPlacement)
   // Q4: teachers that have an initial position must also have a final position
   ensures forall t:: t in initialPlacement ==> t in finalPlacement  
@@ -240,59 +240,66 @@ method teachersPlacement(vacancies: set<Vacancy>, teachers: useq<Teacher>, prefe
     // Reduction to the problem of stable marriage, with teachers as men (with the given preferences),
     // vacancies as women, and the preferences of each vacancy given by the ranked list of teachers with the 
     // teacher initially placed there (if any) moved to the head   
-    var vacanciesPrefs := map v | v in vacancies ::
-                            if t :| t in initialPlacement && initialPlacement[t] == v 
-                            then moveToHead(teachers, t)
-                            else teachers; 
-    finalPlacement := stableMatching(preferences, vacanciesPrefs);  
+    finalPlacement := stableMatching(preferences, vacanciesPrefs(vacancies, teachers, initialPlacement));  
 }
 
-
+// preferences of each vacancy given by the ranked list of teachers with the 
+// teacher initially placed there (if any) moved to the head   
+function method vacanciesPrefs(vacancies: set<Vacancy>, teachers: useq<Teacher>, initialPlacement: inmap <Teacher, Vacancy>): map<Teacher, seq<Vacancy>>  
+  requires forall t :: t in initialPlacement ==> t in teachers && initialPlacement[t] in vacancies
+{
+    map v | v in vacancies ::
+        if t :| t in initialPlacement && initialPlacement[t] == v 
+        then moveToHead(teachers, t)
+        else teachers 
+}
 
 /*
  * Some test cases for the teachers placement problem.
  */
 
-method testTP(name: string, vacancies: set<Vacancy>, teachers: useq<Teacher>, preferences: map<Teacher, useq<Vacancy>>, initialPlacement: inmap <Teacher, Vacancy>,
-              expectedFinalPlacement: set<inmap<Teacher, Vacancy>>) 
-    requires forall t :: t in teachers ==> t in preferences 
-    requires forall t :: t in preferences ==> t in teachers
-    requires forall t :: t in preferences ==> forall v :: v in preferences[t] ==> v in vacancies
-    requires forall t :: t in initialPlacement ==> t in teachers
-    requires forall t :: t in initialPlacement ==> initialPlacement[t] in preferences[t]
-                                      && initialPlacement[t] == last(preferences[t]); 
-    requires forall t :: t in initialPlacement ==> initialPlacement[t] in vacancies
-{
-    print "test ", name, ": ";
-    var actualFinalPlacement := teachersPlacement(vacancies, teachers, preferences, initialPlacement); 
-    if actualFinalPlacement in expectedFinalPlacement {
-        print "passed!\n";
-        if |expectedFinalPlacement| > 1 {
-            print "  actualFinalPlacement = ", actualFinalPlacement , "\n";
-        }
-    }
-    else {
-        print "failed!\n";
-        print "  actualFinalPlacement = ", actualFinalPlacement , "\n";
-        print "  expectedFinalPlacement = ", expectedFinalPlacement , "\n";
-    }
-}
 
 method test1TP() {
-    testTP("test1TP", {1, 2}, [1, 2, 3], map [1 := [2, 1], 2 := [1, 2], 3 := [2]], map [1 := 1], {map[1 := 2, 2 := 1]});
+    var vacancies := {1, 2};
+    var teachers := [1, 2, 3];
+    var preferences := map [1 := [2, 1], 2 := [1, 2], 3 := [2]];
+    var initialPlacement :=  map [1 := 1];
+    var expectedVacanciesPrefs := map[1 := [1, 2, 3], 2 := [1, 2, 3]];
+    var expectedFinalPlacement := map[1 := 2, 2 := 1];
+
+    //var actualVacanciesPrefs := vacanciesPrefs(vacancies, teachers, initialPlacement); 
+    //assert actualVacanciesPrefs[1] == expectedVacanciesPrefs[1]; // proof helper
+    //assert actualVacanciesPrefs[2] == expectedVacanciesPrefs[2]; // proof helper
+    //assert actualVacanciesPrefs == expectedVacanciesPrefs; 
+
+    var actualFinalPlacement := teachersPlacement(vacancies, teachers, preferences, initialPlacement); 
+
+    assert isValid(expectedFinalPlacement, preferences, expectedVacanciesPrefs); // proof helper...
+    assert !unstable(1, 1, expectedFinalPlacement, preferences, expectedVacanciesPrefs); // proof helper...
+    //assert isStable(expectedFinalPlacement, preferences, expectedVacanciesPrefs); // proof helper...
+
+    assert actualFinalPlacement == expectedFinalPlacement; 
 }
 
 method test2TP() {
-    testTP("test2TP", {1, 2}, [1, 2, 3], map [1 := [2, 1], 2 := [1, 2], 3 := [2, 1]], map [3 := 1], {map[1 := 2, 3 := 1]});
-}
+    var vacancies := {1, 2};
+    var teachers := [1, 2, 3];
+    var preferences := map [1 := [2, 1], 2 := [1, 2], 3 := [2, 1]];
+    var initialPlacement :=  map [3 := 1];
+    var expectedVacanciesPrefs := map[1 := [3, 1, 2], 2 := [1, 2, 3]];
+    var expectedFinalPlacement := map[1 := 2, 3 := 1];
 
-method testTeachersPlacement() {
-    print "Running test cases for the teachers placement problem ...\n";
-    test1TP();
-    test2TP();
-}
+    //var actualVacanciesPrefs := vacanciesPrefs(vacancies, teachers, initialPlacement);
+    assert moveToHead(teachers, 3) == [3, 1, 2]; // proof helper 
+    //assert actualVacanciesPrefs[1] == expectedVacanciesPrefs[1]; // proof helper
+    //assert actualVacanciesPrefs[2] == expectedVacanciesPrefs[2]; // proof helper
+    //assert actualVacanciesPrefs == expectedVacanciesPrefs; 
 
-method Main() {
-    testStableMarriage();
-    testTeachersPlacement();
+    var actualFinalPlacement := teachersPlacement(vacancies, teachers, preferences, initialPlacement); 
+
+    assert isValid(expectedFinalPlacement, preferences, expectedVacanciesPrefs); // proof helper...
+    assert !unstable(1, 1, expectedFinalPlacement, preferences, expectedVacanciesPrefs); // proof helper...
+    // assert isStable(expectedFinalPlacement, preferences, expectedVacanciesPrefs); // proof helper...
+
+    assert actualFinalPlacement == expectedFinalPlacement; 
 }
