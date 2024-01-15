@@ -16,18 +16,13 @@ method powerDC(x: real, n: nat) returns (p : real)
     if n == 0 {
         return 1.0;
     }
-    else if n == 1 {
-        return x;
-    }
     else if n % 2 == 0 {
         productOfPowers(x,  n/2, n/2); // recall lemma
         var temp := powerDC(x, n/2);
         return temp * temp;
     }
     else {
-        productOfPowers(x, (n-1)/2, (n-1)/2); // recall lemma  
-        var temp := powerDC(x, (n-1)/2);
-        return temp * temp * x;
+        return x * powerDC(x, n-1);
     } 
 }
 
